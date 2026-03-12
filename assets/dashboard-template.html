@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>X Analytics Dashboard - @{{USERNAME}}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+:root {
+  --bg: #09090b;
+  --surface: #111114;
+  --surface-2: #18181c;
+  --surface-3: #1f1f25;
+  --border: #27272a;
+  --border-hover: #3f3f46;
+  --text: #fafafa;
+  --text-2: #a1a1aa;
+  --text-3: #71717a;
+  --accent: #818cf8;
+  --accent-dim: rgba(129,140,248,0.12);
+  --green: #4ade80;
+  --green-dim: rgba(74,222,128,0.12);
+  --rose: #fb7185;
+  --rose-dim: rgba(251,113,133,0.12);
+  --amber: #fbbf24;
+  --amber-dim: rgba(251,191,36,0.12);
+  --blue: #60a5fa;
+  --blue-dim: rgba(96,165,250,0.12);
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+.container{max-width:1080px;margin:0 auto;padding:0 20px}
+
+/* NAV */
+.nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);background:rgba(9,9,11,0.8);border-bottom:1px solid var(--border)}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;padding:14px 0}
+.nav-brand{display:flex;align-items:center;gap:12px}
+.nav-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#818cf8,#c084fc);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#fff}
+.nav-name{font-weight:600;font-size:15px}
+.nav-handle{color:var(--text-3);font-size:13px}
+.nav-link{padding:8px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-2);font-size:13px;text-decoration:none;transition:all .2s}
+.nav-link:hover{border-color:var(--accent);color:var(--accent)}
+
+/* HERO STATS */
+.hero{padding:32px 0 24px}
+.hero h2{font-size:24px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px}
+.hero p{color:var(--text-3);font-size:14px;margin-bottom:20px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 16px;transition:border-color .2s}
+.stat-card:hover{border-color:var(--border-hover)}
+.stat-label{font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.stat-value{font-size:26px;font-weight:700;letter-spacing:-1px}
+.stat-sub{font-size:12px;margin-top:4px}
+.stat-card.green .stat-value{color:var(--green)}.stat-card.green .stat-sub{color:var(--green)}
+.stat-card.accent .stat-value{color:var(--accent)}.stat-card.accent .stat-sub{color:var(--accent)}
+.stat-card.amber .stat-value{color:var(--amber)}.stat-card.amber .stat-sub{color:var(--amber)}
+.stat-card.rose .stat-value{color:var(--rose)}.stat-card.rose .stat-sub{color:var(--rose)}
+
+/* SECTIONS */
+.section{margin-top:32px}
+.section-header{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.section-icon{width:32px;height:32px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:16px}
+.section-icon.purple{background:var(--accent-dim)}.section-icon.green{background:var(--green-dim)}.section-icon.amber{background:var(--amber-dim)}.section-icon.blue{background:var(--blue-dim)}.section-icon.rose{background:var(--rose-dim)}
+.section-title{font-size:17px;font-weight:600;letter-spacing:-.3px}
+
+/* CHART */
+.chart-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;position:relative}
+.chart-inner{position:relative;height:320px}
+.chart-inner canvas{position:absolute;top:0;left:0;width:100%!important;height:100%!important}
+.chart-legend{display:flex;gap:16px;margin-top:12px;justify-content:center;flex-wrap:wrap}
+.chart-legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3)}
+.chart-legend-dot{width:8px;height:8px;border-radius:50%}
+
+/* TOP POSTS */
+.post-list{display:flex;flex-direction:column;gap:8px}
+.post-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:grid;grid-template-columns:40px 1fr auto;gap:14px;align-items:start;transition:all .2s;cursor:pointer;text-decoration:none;color:inherit}
+.post-item:hover{border-color:var(--accent);background:var(--surface-2);transform:translateY(-1px)}
+.post-rank{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0}
+.post-rank.gold{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000}
+.post-rank.silver{background:linear-gradient(135deg,#94a3b8,#64748b);color:#fff}
+.post-rank.bronze{background:linear-gradient(135deg,#d97706,#b45309);color:#fff}
+.post-rank.normal{background:var(--surface-3);color:var(--text-2)}
+.post-body{min-width:0}
+.post-text{font-size:14px;line-height:1.55;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:8px}
+.post-date{font-size:12px;color:var(--text-3)}
+.post-stats{display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;min-width:90px}
+.post-stat{font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:4px}
+.post-stat .val{font-weight:600;color:var(--text)}
+
+/* ANALYSIS CARDS */
+.analysis-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.analysis-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;transition:border-color .2s}
+.analysis-card:hover{border-color:var(--border-hover)}
+.analysis-card.full{grid-column:1/-1}
+.analysis-card h3{font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.analysis-card h3 .badge{font-size:11px;padding:2px 8px;border-radius:10px;font-weight:500}
+.analysis-card p,.analysis-card li{font-size:14px;color:var(--text-2);line-height:1.7}
+.analysis-card ul{list-style:none;padding:0}
+.analysis-card li{padding:6px 0;border-bottom:1px solid rgba(39,39,42,.5)}
+.analysis-card li:last-child{border-bottom:none}
+.analysis-card li strong{color:var(--text);font-weight:600}
+.highlight-box{background:var(--surface-2);border-radius:var(--radius-sm);padding:14px 16px;margin-top:12px;border-left:3px solid var(--accent)}
+.highlight-box p{font-size:14px;color:var(--text);font-style:italic}
+
+/* COMMENT / AUDIENCE ANALYSIS */
+.voices-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.voice-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;transition:all .2s}
+.voice-card:hover{border-color:var(--border-hover);transform:translateY(-1px)}
+.voice-card.featured{border-left:3px solid var(--accent)}
+.voice-quote{font-size:13px;color:var(--text-2);line-height:1.65;font-style:italic;margin-bottom:10px}
+.voice-quote::before{content:'\201C';font-size:22px;color:var(--accent);line-height:0;vertical-align:-6px;margin-right:2px}
+.voice-meta{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.voice-author{font-size:12px;font-weight:600;color:var(--text)}
+.voice-source{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:500;letter-spacing:.3px}
+.voice-source.substack{background:var(--accent-dim);color:var(--accent)}
+.voice-source.github{background:var(--green-dim);color:var(--green)}
+.voice-source.media{background:var(--amber-dim);color:var(--amber)}
+.voice-source.reddit{background:var(--rose-dim);color:var(--rose)}
+.voice-source.x{background:var(--blue-dim);color:var(--blue)}
+.sentiment-bars{margin-top:8px}
+.sentiment-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(39,39,42,.4)}
+.sentiment-row:last-child{border-bottom:none}
+.sentiment-label{font-size:13px;color:var(--text-2);min-width:140px}
+.sentiment-fill{flex:1;height:8px;background:var(--surface-3);border-radius:4px;overflow:hidden}
+.sentiment-fill-inner{height:100%;border-radius:4px}
+.sentiment-pct{font-size:12px;font-weight:600;color:var(--text);min-width:36px;text-align:right}
+.comment-stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.comment-stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:center}
+.comment-stat .num{font-size:22px;font-weight:700;letter-spacing:-.5px}
+.comment-stat .lbl{font-size:11px;color:var(--text-3);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+.theme-tag{display:inline-block;font-size:11px;padding:3px 10px;border-radius:12px;margin:3px 4px 3px 0;font-weight:500}
+.theme-cloud{margin-top:10px;line-height:2.2}
+
+/* TWEET DRAFTS */
+.drafts-section{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.draft-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;transition:all .2s;position:relative}
+.draft-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.draft-category{font-size:10px;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;font-weight:600}
+.draft-category.green{color:var(--green)}.draft-category.amber{color:var(--amber)}.draft-category.blue{color:var(--blue)}.draft-category.rose{color:var(--rose)}
+.draft-text{font-size:13px;line-height:1.6;color:var(--text-2)}
+.draft-copy{position:absolute;top:10px;right:10px;width:28px;height:28px;border-radius:6px;background:var(--surface-3);border:none;color:var(--text-3);cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:all .2s}
+.draft-card:hover .draft-copy{opacity:1}
+.draft-copy:hover{background:var(--accent);color:#fff}
+.draft-copy.copied{background:var(--green);color:#fff;opacity:1}
+
+/* FOOTER */
+.footer{padding:40px 0;text-align:center;color:var(--text-3);font-size:12px;border-top:1px solid var(--border);margin-top:40px}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .analysis-grid{grid-template-columns:1fr}
+  .drafts-section{grid-template-columns:1fr}
+  .post-item{grid-template-columns:32px 1fr;gap:10px}
+  .post-stats{flex-direction:row;flex-wrap:wrap;align-items:flex-start;min-width:0;margin-top:6px;grid-column:1/-1}
+  .stat-value{font-size:22px}
+  .voices-grid{grid-template-columns:1fr}
+  .comment-stats-row{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:480px){
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .hero h2{font-size:20px}
+}
+</style>
+</head>
+<body>
+
+<!--
+  TEMPLATE INSTRUCTIONS:
+  Replace all {{PLACEHOLDER}} values with real data.
+  This template contains the full CSS and HTML structure.
+  Populate the JavaScript data arrays (TOP_POSTS, DRAFTS, VOICES, etc.) with scraped data.
+  The Chart.js growth chart uses estimated/real follower data.
+-->
+
+<!-- NAV -->
+<nav class="nav"><div class="container nav-inner">
+  <div class="nav-brand">
+    <div class="nav-avatar">{{INITIAL}}</div>
+    <div><div class="nav-name">{{DISPLAY_NAME}}</div><div class="nav-handle">@{{USERNAME}}</div></div>
+  </div>
+  <a href="https://x.com/{{USERNAME}}" target="_blank" class="nav-link">View Profile &rarr;</a>
+</div></nav>
+
+<div class="container">
+
+<!-- HERO STATS -->
+<div class="hero">
+  <h2>X Analytics Dashboard</h2>
+  <p>Growth & content analysis based on scraped data -- {{DATE_RANGE}}</p>
+  <div class="stats-grid">
+    <div class="stat-card green">
+      <div class="stat-label">Total Growth</div>
+      <div class="stat-value">{{TOTAL_GROWTH}}</div>
+      <div class="stat-sub">{{GROWTH_RANGE}}</div>
+    </div>
+    <div class="stat-card accent">
+      <div class="stat-label">Avg Daily Net</div>
+      <div class="stat-value">{{AVG_DAILY}}</div>
+      <div class="stat-sub">{{DAYS_TRACKED}}</div>
+    </div>
+    <div class="stat-card amber">
+      <div class="stat-label">Best Single Day</div>
+      <div class="stat-value">{{BEST_DAY}}</div>
+      <div class="stat-sub">{{BEST_DAY_DATE}}</div>
+    </div>
+    <div class="stat-card rose">
+      <div class="stat-label">Top Post Views</div>
+      <div class="stat-value">{{TOP_VIEWS}}</div>
+      <div class="stat-sub">{{TOP_VIEWS_DESC}}</div>
+    </div>
+  </div>
+</div>
+
+<!-- FOLLOWER GROWTH CHART -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon purple">&#x1f4c8;</div>
+    <div class="section-title">Follower Growth Timeline</div>
+  </div>
+  <div class="chart-wrap">
+    <div class="chart-inner"><canvas id="growthChart"></canvas></div>
+    <div class="chart-legend">
+      <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--accent)"></div>Follower Count</div>
+      <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--amber)"></div>Milestones</div>
+      <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--rose)"></div>Viral Days</div>
+    </div>
+  </div>
+</div>
+
+<!-- TOP 10 POSTS -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon green">&#x1f525;</div>
+    <div class="section-title">Top 10 Posts by Engagement</div>
+  </div>
+  <div class="post-list" id="topPosts"></div>
+</div>
+
+<!-- CONTENT ANALYSIS -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon amber">&#x1f9e0;</div>
+    <div class="section-title">Content Analysis</div>
+  </div>
+  <div class="analysis-grid">
+    <!-- Cards: Why Viral, Content-Market Fit, Thought Patterns, Future Topics -->
+    <!-- POPULATE THESE BASED ON ANALYSIS OF SCRAPED DATA -->
+  </div>
+</div>
+
+<!-- AUDIENCE VOICE / COMMENT ANALYSIS (if comments data available) -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon rose">&#x1f4ac;</div>
+    <div class="section-title">Audience Voice -- Comment Analysis</div>
+  </div>
+  <div class="comment-stats-row">
+    <div class="comment-stat"><div class="num" style="color:var(--accent)">{{TOTAL_COMMENTS}}</div><div class="lbl">Real Comments</div></div>
+    <div class="comment-stat"><div class="num" style="color:var(--green)">{{PLATFORMS_COUNT}}</div><div class="lbl">Platforms</div></div>
+    <div class="comment-stat"><div class="num" style="color:var(--amber)">{{GITHUB_STARS}}</div><div class="lbl">GitHub Stars</div></div>
+    <div class="comment-stat"><div class="num" style="color:var(--rose)">{{POSITIVE_PCT}}</div><div class="lbl">Positive Sentiment</div></div>
+  </div>
+  <div class="analysis-grid">
+    <div class="analysis-card full">
+      <h3><span class="badge" style="background:var(--accent-dim);color:var(--accent)">Voices</span> What Real People Are Saying</h3>
+      <div class="voices-grid" id="voicesGrid"></div>
+    </div>
+    <div class="analysis-card">
+      <h3><span class="badge" style="background:var(--green-dim);color:var(--green)">Sentiment</span> What Resonates Most</h3>
+      <div class="sentiment-bars" id="sentimentBars"></div>
+    </div>
+    <div class="analysis-card">
+      <h3><span class="badge" style="background:var(--rose-dim);color:var(--rose)">Themes</span> Recurring Audience Themes</h3>
+      <!-- POPULATE WITH THEME ANALYSIS -->
+    </div>
+  </div>
+</div>
+
+<!-- TWEET DRAFTS -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon blue">&#x270d;&#xfe0f;</div>
+    <div class="section-title">Ready-to-Tweet Ideas</div>
+  </div>
+  <div class="drafts-section" id="drafts"></div>
+</div>
+
+</div><!-- container -->
+
+<div class="footer">
+  <div class="container">
+    Data scraped from X on {{SCRAPE_DATE}} | {{FOOTER_NOTE}}
+  </div>
+</div>
+
+<script>
+// ============================================================
+// DATA -- Populate these arrays with scraped data
+// ============================================================
+
+const TOP_POSTS = [
+  // {rank:1, views:"3.2M", likes:"6.8K", retweets:"1K", date:"Oct 14, 2025", text:"...", url:"https://x.com/..."}
+];
+
+const DRAFTS = [
+  // {cat:"Double Down", color:"green", text:"Draft tweet text..."}
+];
+
+const VOICES = [
+  // {quote:"Real comment text", author:"Name", source:"substack|media|github|reddit|x", featured:true|false}
+];
+
+const SENTIMENT_DATA = [
+  // {label:"Category", pct:38, color:"var(--green)"}
+];
+
+// Follower growth data (estimate or real if CSV provided)
+const GROWTH_DATA = (function(){
+  const data = [];
+  const start = new Date('{{START_DATE}}');
+  const end = new Date('{{END_DATE}}');
+  let followers = {{START_FOLLOWERS}};
+  const milestones = [];
+  const viralDays = [
+    // {date:'2025-10-14', gain:1200, label:'Viral post description'}
+  ];
+  const viralMap = {};
+  viralDays.forEach(v => viralMap[v.date] = v);
+
+  for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
+    const ds = d.toISOString().split('T')[0];
+    let dailyGain = {{BASE_DAILY_GAIN}} + Math.random()*80;
+    const daysSinceStart = (d - start) / 86400000;
+    dailyGain += daysSinceStart * 0.5;
+    if(viralMap[ds]) dailyGain = viralMap[ds].gain;
+    if(d.getDay()===0 || d.getDay()===6) dailyGain *= 0.7;
+    dailyGain += (Math.random()-0.5)*40;
+    dailyGain = Math.max(30, Math.round(dailyGain));
+    followers += dailyGain;
+    const prev = followers - dailyGain;
+    // Auto-detect milestones at 10K intervals
+    for(let m = 10000; m <= 1000000; m += 10000){
+      if(prev < m && followers >= m) milestones.push({date:ds, value:m});
+    }
+    data.push({date:ds, followers:Math.round(followers), gain:dailyGain});
+  }
+  // Correct to known final value
+  const correction = {{END_FOLLOWERS}} - data[data.length-1].followers;
+  data.forEach((d,i) => d.followers += Math.round(correction * i / data.length));
+  return {data, milestones, viralDays};
+})();
+
+// ============================================================
+// RENDER FUNCTIONS
+// ============================================================
+function escapeHtml(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML}
+
+function renderGrowthChart(){
+  const ctx = document.getElementById('growthChart').getContext('2d');
+  new Chart(ctx, {
+    type:'line',
+    data:{
+      labels:GROWTH_DATA.data.map(d=>d.date),
+      datasets:[{
+        data:GROWTH_DATA.data.map(d=>d.followers),
+        borderColor:'#818cf8', backgroundColor:'rgba(129,140,248,0.08)',
+        fill:true, tension:0.3, pointRadius:0, pointHoverRadius:5,
+        pointHoverBackgroundColor:'#818cf8', borderWidth:2
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'rgba(17,17,20,0.95)', titleColor:'#fafafa', bodyColor:'#a1a1aa',
+          borderColor:'#27272a', borderWidth:1, padding:12, cornerRadius:8,
+          callbacks:{
+            title:items=>new Date(items[0].label).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}),
+            afterTitle:items=>{
+              const idx=items[0].dataIndex;const g=GROWTH_DATA.data[idx]?.gain||0;
+              const v=GROWTH_DATA.viralDays.find(v=>v.date===GROWTH_DATA.data[idx]?.date);
+              return 'Daily: +'+g.toLocaleString()+(v?'\n'+v.label:'');
+            },
+            label:item=>'Followers: '+item.raw.toLocaleString()
+          }
+        }
+      },
+      scales:{
+        x:{type:'time',time:{unit:'month',displayFormats:{month:'MMM yyyy'}},grid:{color:'rgba(39,39,42,0.5)'},ticks:{color:'#71717a',font:{size:11}}},
+        y:{grid:{color:'rgba(39,39,42,0.5)'},ticks:{color:'#71717a',font:{size:11},callback:v=>v>=1000?(v/1000)+'K':v}}
+      }
+    },
+    plugins:[{
+      id:'custom-annotations',
+      afterDraw(chart){
+        const {ctx:c, chartArea:{top}} = chart;
+        GROWTH_DATA.viralDays.forEach(v=>{
+          const meta=chart.getDatasetMeta(0);const idx=GROWTH_DATA.data.findIndex(d=>d.date===v.date);
+          if(idx>=0&&meta.data[idx]){const pt=meta.data[idx];c.save();c.fillStyle='rgba(251,113,133,0.9)';c.beginPath();c.arc(pt.x,pt.y,4,0,Math.PI*2);c.fill();c.fillStyle='#fb7185';c.font='bold 10px -apple-system,sans-serif';c.textAlign='center';c.fillText('+'+v.gain.toLocaleString(),pt.x,pt.y-12);c.restore();}
+        });
+        GROWTH_DATA.milestones.forEach(m=>{
+          const idx=GROWTH_DATA.data.findIndex(d=>d.date===m.date);
+          if(idx>=0){const meta=chart.getDatasetMeta(0);if(meta.data[idx]){const x=meta.data[idx].x;c.save();c.strokeStyle='rgba(251,191,36,0.3)';c.lineWidth=1;c.setLineDash([4,4]);c.beginPath();c.moveTo(x,top);c.lineTo(x,meta.data[idx].y);c.stroke();c.setLineDash([]);c.fillStyle='rgba(251,191,36,0.15)';c.fillRect(x-18,top+4,36,18);c.fillStyle='#fbbf24';c.font='bold 11px -apple-system,sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText((m.value/1000)+'K',x,top+13);c.restore();}}
+        });
+      }
+    }]
+  });
+}
+
+function renderTopPosts(){
+  document.getElementById('topPosts').innerHTML = TOP_POSTS.map(p=>{
+    const rc = p.rank===1?'gold':p.rank===2?'silver':p.rank===3?'bronze':'normal';
+    return `<a href="${p.url}" target="_blank" class="post-item"><div class="post-rank ${rc}">${p.rank}</div><div class="post-body"><div class="post-text">${escapeHtml(p.text)}</div><div class="post-date">${p.date}</div></div><div class="post-stats"><div class="post-stat"><span class="val">${p.views}</span> views</div><div class="post-stat"><span class="val">${p.likes}</span> likes</div><div class="post-stat"><span class="val">${p.retweets}</span> RTs</div></div></a>`;
+  }).join('');
+}
+
+function renderDrafts(){
+  document.getElementById('drafts').innerHTML = DRAFTS.map((d,i)=>`
+    <div class="draft-card"><div class="draft-category ${d.color}">${d.cat}</div><div class="draft-text">${escapeHtml(d.text)}</div>
+    <button class="draft-copy" onclick="copyDraft(${i},this)" title="Copy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>
+  `).join('');
+}
+function copyDraft(i,btn){navigator.clipboard.writeText(DRAFTS[i].text).then(()=>{btn.classList.add('copied');btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>';setTimeout(()=>{btn.classList.remove('copied');btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';},1500);})}
+
+function renderVoices(){
+  const el = document.getElementById('voicesGrid');
+  if(!VOICES.length){el.closest('.analysis-card').style.display='none';return;}
+  el.innerHTML = VOICES.map(v=>`<div class="voice-card${v.featured?' featured':''}"><div class="voice-quote">${escapeHtml(v.quote)}</div><div class="voice-meta"><span class="voice-author">${escapeHtml(v.author)}</span><span class="voice-source ${v.source}">${{substack:'Substack',media:'Media',github:'GitHub',reddit:'Reddit',x:'X'}[v.source]||v.source}</span></div></div>`).join('');
+}
+
+function renderSentiment(){
+  const el = document.getElementById('sentimentBars');
+  if(!SENTIMENT_DATA.length){el.closest('.analysis-card').style.display='none';return;}
+  el.innerHTML = SENTIMENT_DATA.map(s=>`<div class="sentiment-row"><span class="sentiment-label">${s.label}</span><div class="sentiment-fill"><div class="sentiment-fill-inner" style="width:${s.pct}%;background:${s.color}"></div></div><span class="sentiment-pct">${s.pct}%</span></div>`).join('');
+}
+
+// Init
+renderGrowthChart();
+renderTopPosts();
+renderDrafts();
+renderVoices();
+renderSentiment();
+</script>
+</body>
+</html>
