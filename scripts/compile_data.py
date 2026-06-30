@@ -11,6 +11,7 @@ Input: Reads JSON files from --data-dir:
   - posts_detail/*.json  (individual post details)
   - comments/*.json      (comment data per post)
   - web_search.json      (posts found via web search)
+  - optional TweetClaw JSON/JSONL export via --tweetclaw-export
 
 Output: Unified JSON with structure:
   { meta, posts_detail[], timeline_all_posts[] }
@@ -50,7 +51,165 @@ def load_json(filepath):
         return None
 
 
-def compile_data(username, data_dir, output_path):
+def iter_candidate_records(value):
+    """Yield likely top-level TweetClaw rows without descending into quoted posts."""
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, dict):
+                yield item
+        return
+
+    if not isinstance(value, dict):
+        return
+
+    container_keys = [
+        'tweets',
+        'posts',
+        'results',
+        'items',
+        'records',
+        'data',
+    ]
+    yielded = False
+    for key in container_keys:
+        child = value.get(key)
+        if isinstance(child, list):
+            yielded = True
+            for item in child:
+                if isinstance(item, dict):
+                    yield item
+
+    if not yielded:
+        yield value
+
+
+def first_text(record, keys):
+    """Return the first non-empty text value for any candidate key."""
+    for key in keys:
+        value = record.get(key)
+        if isinstance(value, str) and value.strip():
+            return ' '.join(value.split())
+        if isinstance(value, (int, float)):
+            return str(value)
+    return ''
+
+
+def first_metric(record, keys):
+    """Return a metric from the record or nested metrics object."""
+    sources = [record]
+    metrics = record.get('metrics')
+    if isinstance(metrics, dict):
+        sources.append(metrics)
+    metrics_parsed = record.get('metrics_parsed')
+    if isinstance(metrics_parsed, dict):
+        sources.append(metrics_parsed)
+
+    for source in sources:
+        for key in keys:
+            value = source.get(key)
+            if isinstance(value, (int, float)):
+                return str(int(value))
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return '0'
+
+
+def tweet_id_from_url(url):
+    """Extract a tweet ID from a status URL when no explicit ID is present."""
+    if not url:
+        return ''
+    marker = '/status/'
+    if marker not in url:
+        return ''
+    suffix = url.split(marker, 1)[1]
+    return suffix.split('?', 1)[0].split('/', 1)[0]
+
+
+def normalize_tweetclaw_post(record):
+    """Normalize one TweetClaw-exported post into the dashboard post shape."""
+    text = first_text(record, [
+        'text',
+        'full_text',
+        'fullText',
+        'tweetText',
+        'tweet_text',
+        'content',
+        'body',
+    ])
+    if len(text) < 8:
+        return None
+
+    url = first_text(record, ['url', 'tweetUrl', 'tweet_url', 'permalink', 'link'])
+    post_id = first_text(record, ['id', 'tweetId', 'tweet_id', 'postId', 'post_id'])
+    if not post_id:
+        post_id = tweet_id_from_url(url)
+    timestamp = first_text(record, [
+        'timestamp_iso',
+        'timestamp',
+        'createdAt',
+        'created_at',
+        'date',
+    ])
+
+    return {
+        'id': post_id,
+        'url': url,
+        'text': text,
+        'timestamp_iso': timestamp,
+        'timestamp_display': timestamp[:10] if timestamp else '',
+        'source': 'TweetClaw export',
+        'metrics_parsed': {
+            'replies': first_metric(record, ['replies', 'replyCount', 'reply_count']),
+            'retweets': first_metric(record, [
+                'retweets',
+                'reposts',
+                'retweetCount',
+                'retweet_count',
+            ]),
+            'likes': first_metric(record, ['likes', 'likeCount', 'like_count', 'favorites']),
+            'views': first_metric(record, ['views', 'viewCount', 'view_count', 'impressions']),
+        },
+        'comments': [],
+    }
+
+
+def load_tweetclaw_export(filepath):
+    """Load TweetClaw JSON or JSONL and return normalized unique posts."""
+    if not filepath:
+        return []
+
+    path = Path(filepath)
+    try:
+        raw = path.read_text(encoding='utf-8').strip()
+    except OSError as exc:
+        raise ValueError(f"Could not read TweetClaw export: {path}") from exc
+
+    if not raw:
+        return []
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        try:
+            parsed = [json.loads(line) for line in raw.splitlines() if line.strip()]
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Could not parse TweetClaw export as JSON or JSONL: {path}") from exc
+
+    posts = []
+    seen = set()
+    for record in iter_candidate_records(parsed):
+        post = normalize_tweetclaw_post(record)
+        if not post:
+            continue
+        key = post.get('id') or post.get('url') or post.get('text')
+        if key in seen:
+            continue
+        seen.add(key)
+        posts.append(post)
+    return posts
+
+
+def compile_data(username, data_dir, output_path, tweetclaw_export=None):
     data_dir = Path(data_dir)
 
     # Load profile
@@ -94,6 +253,14 @@ def compile_data(username, data_dir, output_path):
             posts_detail.append(wp)
             existing_ids.add(wp['id'])
 
+    # Merge optional TweetClaw export posts.
+    tweetclaw_posts = load_tweetclaw_export(tweetclaw_export)
+    for post in tweetclaw_posts:
+        post_id = post.get('id') or post.get('url')
+        if post_id and post_id not in existing_ids:
+            posts_detail.append(post)
+            existing_ids.add(post_id)
+
     # Sort by timestamp
     def sort_key(p):
         ts = p.get('timestamp_iso') or p.get('timestamp') or ''
@@ -109,6 +276,16 @@ def compile_data(username, data_dir, output_path):
             seen.add(tid)
             unique_timeline.append(t)
 
+    data_sources = profile.get('data_sources', [
+        "Browser scraping of X profile timeline",
+        "Direct URL visits for individual posts",
+        "Web search"
+    ])
+    if tweetclaw_posts:
+        data_sources = [*data_sources]
+        if "TweetClaw export" not in data_sources:
+            data_sources.append("TweetClaw export")
+
     # Build output
     result = {
         "meta": {
@@ -121,11 +298,7 @@ def compile_data(username, data_dir, output_path):
             "following": profile.get('following', 0),
             "total_posts": profile.get('total_posts', len(posts_detail)),
             "scraped_at": profile.get('scraped_at', ''),
-            "data_sources": profile.get('data_sources', [
-                "Browser scraping of X profile timeline",
-                "Direct URL visits for individual posts",
-                "Web search"
-            ])
+            "data_sources": data_sources
         },
         "posts_detail": posts_detail,
         "timeline_all_posts": unique_timeline
@@ -146,5 +319,10 @@ if __name__ == '__main__':
     parser.add_argument('--username', required=True)
     parser.add_argument('--data-dir', required=True)
     parser.add_argument('--output', required=True)
+    parser.add_argument('--tweetclaw-export')
     args = parser.parse_args()
-    compile_data(args.username, args.data_dir, args.output)
+    try:
+        compile_data(args.username, args.data_dir, args.output, args.tweetclaw_export)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)

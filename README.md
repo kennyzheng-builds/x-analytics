@@ -78,6 +78,7 @@ After scraping into `/tmp/x_scrape`, run:
 python3 scripts/compile_data.py \
   --username USERNAME \
   --data-dir /tmp/x_scrape \
+  --tweetclaw-export /path/to/tweetclaw-export.jsonl \
   --output outputs/USERNAME_raw_data.json
 ```
 
@@ -88,8 +89,14 @@ python3 scripts/compile_data.py \
 - `posts_detail/*.json`
 - `comments/*.json`
 - `web_search.json`
+- optional TweetClaw JSON or JSONL exports
 
 and outputs a normalized file with `meta`, `posts_detail`, and `timeline_all_posts`.
+
+Use the TweetClaw option when the user already has an approved X/Twitter export
+and wants the dashboard grounded in that source instead of collecting every post
+again. The compiler keeps those rows labeled as `TweetClaw export` in
+`meta.data_sources`.
 
 ---
 
