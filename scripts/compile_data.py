@@ -51,15 +51,36 @@ def load_json(filepath):
         return None
 
 
-def iter_objects(value):
-    """Yield dictionaries from nested lists and dictionaries."""
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            yield from iter_objects(child)
-    elif isinstance(value, list):
+def iter_candidate_records(value):
+    """Yield likely top-level TweetClaw rows without descending into quoted posts."""
+    if isinstance(value, list):
         for item in value:
-            yield from iter_objects(item)
+            if isinstance(item, dict):
+                yield item
+        return
+
+    if not isinstance(value, dict):
+        return
+
+    container_keys = [
+        'tweets',
+        'posts',
+        'results',
+        'items',
+        'records',
+        'data',
+    ]
+    yielded = False
+    for key in container_keys:
+        child = value.get(key)
+        if isinstance(child, list):
+            yielded = True
+            for item in child:
+                if isinstance(item, dict):
+                    yield item
+
+    if not yielded:
+        yield value
 
 
 def first_text(record, keys):
@@ -93,6 +114,17 @@ def first_metric(record, keys):
     return '0'
 
 
+def tweet_id_from_url(url):
+    """Extract a tweet ID from a status URL when no explicit ID is present."""
+    if not url:
+        return ''
+    marker = '/status/'
+    if marker not in url:
+        return ''
+    suffix = url.split(marker, 1)[1]
+    return suffix.split('?', 1)[0].split('/', 1)[0]
+
+
 def normalize_tweetclaw_post(record):
     """Normalize one TweetClaw-exported post into the dashboard post shape."""
     text = first_text(record, [
@@ -107,8 +139,10 @@ def normalize_tweetclaw_post(record):
     if len(text) < 8:
         return None
 
-    post_id = first_text(record, ['id', 'tweetId', 'tweet_id', 'postId', 'post_id'])
     url = first_text(record, ['url', 'tweetUrl', 'tweet_url', 'permalink', 'link'])
+    post_id = first_text(record, ['id', 'tweetId', 'tweet_id', 'postId', 'post_id'])
+    if not post_id:
+        post_id = tweet_id_from_url(url)
     timestamp = first_text(record, [
         'timestamp_iso',
         'timestamp',
@@ -145,18 +179,25 @@ def load_tweetclaw_export(filepath):
         return []
 
     path = Path(filepath)
-    raw = path.read_text(encoding='utf-8').strip()
+    try:
+        raw = path.read_text(encoding='utf-8').strip()
+    except OSError as exc:
+        raise ValueError(f"Could not read TweetClaw export: {path}") from exc
+
     if not raw:
         return []
 
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
-        parsed = [json.loads(line) for line in raw.splitlines() if line.strip()]
+        try:
+            parsed = [json.loads(line) for line in raw.splitlines() if line.strip()]
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Could not parse TweetClaw export as JSON or JSONL: {path}") from exc
 
     posts = []
     seen = set()
-    for record in iter_objects(parsed):
+    for record in iter_candidate_records(parsed):
         post = normalize_tweetclaw_post(record)
         if not post:
             continue
@@ -241,7 +282,9 @@ def compile_data(username, data_dir, output_path, tweetclaw_export=None):
         "Web search"
     ])
     if tweetclaw_posts:
-        data_sources = [*data_sources, "TweetClaw export"]
+        data_sources = [*data_sources]
+        if "TweetClaw export" not in data_sources:
+            data_sources.append("TweetClaw export")
 
     # Build output
     result = {
@@ -278,4 +321,8 @@ if __name__ == '__main__':
     parser.add_argument('--output', required=True)
     parser.add_argument('--tweetclaw-export')
     args = parser.parse_args()
-    compile_data(args.username, args.data_dir, args.output, args.tweetclaw_export)
+    try:
+        compile_data(args.username, args.data_dir, args.output, args.tweetclaw_export)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
