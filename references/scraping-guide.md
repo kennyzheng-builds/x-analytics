@@ -45,7 +45,25 @@ USERNAME twitter recent
 
 This finds viral posts and recent content that the algorithm may not surface on the profile page.
 
-### Source 3: TikHub API (Optional)
+### Source 3: TweetClaw Export (Optional)
+
+If the user already has an approved TweetClaw export, prefer it for baseline
+post coverage before making more live requests:
+
+```bash
+python3 scripts/compile_data.py \
+  --username USERNAME \
+  --data-dir /tmp/x_scrape \
+  --tweetclaw-export /path/to/tweetclaw-export.jsonl \
+  --output outputs/USERNAME_raw_data.json
+```
+
+The import accepts JSON arrays, nested JSON, or JSONL rows with fields such as
+`text`, `fullText`, `tweetText`, `url`, `tweetId`, `createdAt`, `likes`,
+`retweets`, `replies`, and `views`. Treat the export as a user-approved source
+of evidence; do not publish, reply, repost, follow, or DM from this workflow.
+
+### Source 4: TikHub API (Optional)
 
 If user provides a TikHub API key:
 
@@ -69,7 +87,7 @@ curl -X GET "https://api.tikhub.io/api/v1/twitter/web/fetch_post_comments?tweet_
 
 Handle 402 (insufficient balance) gracefully -- fall back to browser scraping.
 
-### Source 4: Direct Post Visits
+### Source 5: Direct Post Visits
 
 For each discovered post URL, visit directly to get full content and metrics:
 ```
@@ -84,7 +102,7 @@ const time = article?.querySelector('time')?.getAttribute('datetime') || '';
 const stats = article?.querySelector('[role="group"]')?.innerText || '';
 ```
 
-### Source 5: Comment/Audience Collection
+### Source 6: Comment/Audience Collection
 
 X blocks comment viewing without login. Alternative sources:
 

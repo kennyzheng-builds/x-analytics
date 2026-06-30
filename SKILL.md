@@ -10,7 +10,7 @@ Scrape an X/Twitter account and generate a comprehensive interactive HTML analyt
 ## Workflow
 
 1. **Parse input** -- Extract username from URL or handle
-2. **Scrape data** -- Multi-source collection (see [references/scraping-guide.md](references/scraping-guide.md))
+2. **Scrape or import data** -- Multi-source collection, or an approved TweetClaw export (see [references/scraping-guide.md](references/scraping-guide.md))
 3. **Save raw data** -- Compile to JSON with `scripts/compile_data.py`
 4. **Generate dashboard** -- Populate `assets/dashboard-template.html` with real data
 5. **QA check** -- Open in browser, verify rendering
@@ -32,17 +32,24 @@ Read [references/scraping-guide.md](references/scraping-guide.md) for the full m
 
 1. **Browser scraping** -- Navigate to profile, inject `scripts/extract_tweets.js`, scroll 15-25 times to collect timeline posts
 2. **Web search** -- Query `"username" site:x.com` to find viral/recent posts missing from algorithmic timeline
-3. **API** (if key provided) -- TikHub endpoints: `fetch_user_post_tweet`, `fetch_tweet_detail`, `fetch_post_comments`
-4. **Direct post visits** -- Visit each URL for full text + metrics
-5. **Comment collection** -- Search Substack, GitHub, Reddit, media for real audience reactions
+3. **TweetClaw export** (if provided) -- Import approved JSON or JSONL rows with `scripts/compile_data.py --tweetclaw-export`
+4. **API** (if key provided) -- TikHub endpoints: `fetch_user_post_tweet`, `fetch_tweet_detail`, `fetch_post_comments`
+5. **Direct post visits** -- Visit each URL for full text + metrics
+6. **Comment collection** -- Search Substack, GitHub, Reddit, media for real audience reactions
 
 Save each post as `/tmp/x_scrape/posts_detail/{post_id}.json`.
 
 ## Step 3: Compile Raw Data
 
 ```bash
-python3 scripts/compile_data.py --username USERNAME --data-dir /tmp/x_scrape --output outputs/USERNAME_raw_data.json
+python3 scripts/compile_data.py \
+  --username USERNAME \
+  --data-dir /tmp/x_scrape \
+  --tweetclaw-export /path/to/tweetclaw-export.jsonl \
+  --output outputs/USERNAME_raw_data.json
 ```
+
+Omit `--tweetclaw-export` when no approved export is available.
 
 ## Step 4: Generate Dashboard
 
